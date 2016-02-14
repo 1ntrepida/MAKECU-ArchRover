@@ -1,31 +1,109 @@
+#include "MotorDriver.h"
+
 #include <NewPing.h>
-#include <Servo.h>
+ 
+#define TRIGGER_PIN  7
+#define ECHO_PIN     6
+#define MAX_DISTANCE 200
+#define SPEED .02186 //cm per millisecond
+ 
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 
-#define TRIGGER_PIN  12  // Arduino pin tied to trigger pin on the ultrasonic sensor.
-#define ECHO_PIN     11  // Arduino pin tied to echo pin on the ultrasonic sensor.
-#define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
+unsigned long beginningTime;
 
-Servo servoLeft;
-Servo servoRight;
+float x;
+float y;
+int angle;
 
-NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+boolean returned;
 
 void setup() {
-  Serial.begin(9600); // Open serial monitor at 115200 baud to see ping results.
+  
+  motordriver.init();
+  motordriver.setSpeed(200,MOTORB);
+  motordriver.setSpeed(200,MOTORA);
+  
+  Serial.begin(9600);
 
-  //assuming the room is rectangular
-  double lengthRoom, heightRoom;
+  beginningTime = millis();
+
+  x = 0;
+  y = 0;
+  angle = 0;
+
+  returned = false;
 }
-
+ 
 void loop() {
-    delay(50);                      // Wait 50ms between pings (about 20 pings/sec)
+
+  while (1)
+  {
+    motordriver.goForward();
+    delay(50); // Wait 50ms between pings (about 20 pings/sec)
+    
     unsigned int distance = sonar.ping()/US_ROUNDTRIP_CM; // Send ping, get ping time in microseconds
-    Serial.print("Ping: ");
-    if(distance <= 10)
+  
+    if(distance <= 20)
     {
-      delay(8000);  //As soon as the robot is 10 cm away from the wall, stop and initialize autonomous mode.
-      //turn right
+        //print out distance traveled
+        unsigned long endTime = millis();
+        unsigned long timeDifference = endTime - beginningTime;
+        unsigned float distanceTraveled = timeDifference * SPEED;
+        Serial.println(distanceTraveled);
+  
+        if (angle % 360 == 0)
+        {
+          y = y + distanceTraveled;
+        }
+        else if (angle % 360 == 90)
+        {
+          x = x + distanceTraveled;
+        }
+        else if (angle % 360 == 180)
+        {
+          y = y - distanceTraveled;
+        }
+        else
+        {
+          x = x - distanceTraveled;
+        }
+  
+        if (x < 20) && (y < 20)
+        {
+          break;
+        }
+        
+        //Stop and turn right approx. 90 degrees
+        motordriver.stop();
+        delay(1000);  
+        motordriver.goRight(); 
+        delay(1775);
+        angle = angle + 90;
+        motordriver.stop();
+        delay(1000);
+  
+        //check to see if there is a wall on the right
+        unsigned int distance = sonar.ping()/US_ROUNDTRIP_CM; // Send ping, get ping time in microseconds
+        if (distance <= 20)
+        {
+          motordriver.goLeft();
+          delay(3550);
+          angle = angle + 180;
+          motordriver.stop();
+          delay(1000);
+          //check to see if there is a wall on the left
+          if (distance <=20)
+          {
+            motordriver.goLeft();
+            delay(1775);
+            angle = angle + 240;
+            motordriver.stop();
+            delay(1000);
+          }
+        }
+        //reset beginning time
+        beginningTime = millis();
     }
-    Serial.print(distance); // Convert ping time to distance in cm and print result (0 = outside set distance range)
-    Serial.println("cm");
+    motordriver.stop();
+  }
 }
